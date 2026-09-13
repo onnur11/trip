@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>일본 여행 일정 플래너 v0.5</title>
+  <title>일본 여행 일정 플래너 v0.6.1 (실시간 공유)</title>
   
   <style>
     * {
@@ -31,11 +31,51 @@
       font-size: 1.1rem;
     }
 
+    /* 공유 코드 바 */
+    .share-bar {
+      background: #202124;
+      color: #fff;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.85rem;
+    }
+    .share-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .share-code-badge {
+      background: #1a73e8;
+      color: #fff;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+    .share-btn-group {
+      display: flex;
+      gap: 6px;
+    }
+    .btn-share-sm {
+      background: #3c4043;
+      color: #fff;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.78rem;
+    }
+    .btn-share-sm:hover {
+      background: #5f6368;
+    }
+
     /* 메인 컨테이너 */
     .app-container {
       display: flex;
       flex-direction: row;
-      height: calc(100vh - 54px);
+      height: calc(100vh - 90px);
       overflow: hidden;
     }
 
@@ -139,7 +179,7 @@
       line-height: 1.5;
     }
 
-    /* 장소 카드 & 드래그 앤 드롭 스타일 */
+    /* 장소 카드 */
     .place-card {
       background: #fff;
       border: 1px solid #e0e0e0;
@@ -261,7 +301,7 @@
       height: 100%;
     }
 
-    /* 팝업 내 버튼 스타일 */
+    /* 팝업 버튼 스타일 */
     .popup-add-btn {
       background-color: #1a73e8;
       color: white;
@@ -282,6 +322,7 @@
     @media (max-width: 768px) {
       .app-container {
         flex-direction: column-reverse;
+        height: calc(100vh - 90px);
       }
       .sidebar {
         width: 100%;
@@ -296,8 +337,21 @@
 <body>
 
   <header>
-    <h2>🗾 Japan Trip Planner v0.5</h2>
+    <h2>🗾 Japan Trip Planner v0.6.1</h2>
   </header>
+
+  <!-- 공유 코드 툴바 -->
+  <div class="share-bar">
+    <div class="share-info">
+      <span>공유 코드:</span>
+      <span id="room-code-display" class="share-code-badge">불러오는 중...</span>
+    </div>
+    <div class="share-btn-group">
+      <button class="btn-share-sm" onclick="copyShareLink()">🔗 링크 복사</button>
+      <button class="btn-share-sm" onclick="joinRoomByPrompt()">🔑 다른 코드 입력</button>
+      <button class="btn-share-sm" onclick="createNewRoom()">➕ 새 일정 만들기</button>
+    </div>
+  </div>
 
   <div class="app-container">
     <div class="sidebar">
@@ -326,11 +380,32 @@
     </div>
   </div>
 
-  <script>
-    const STORAGE_KEY = "JAPAN_TRIP_PLANNER_DATA";
-    let itineraryData = loadSavedData() || { 1: [] };
-    let currentDay = 1;
-    let selectedPlaceData = null;
+  <!-- Firebase SDK 연동 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // 🎯 전달해주신 Firebase SDK 정보 적용 완료
+    const firebaseConfig = {
+      apiKey: "AIzaSyAJePue4OmEXE2QJpl3C6dC6JlZc_6Gte0",
+      authDomain: "trip-6e033.firebaseapp.com",
+      databaseURL: "https://trip-6e033-default-rtdb.firebaseio.com",
+      projectId: "trip-6e033",
+      storageBucket: "trip-6e033.firebasestorage.app",
+      messagingSenderId: "1050322632257",
+      appId: "1:1050322632257:web:3c4a89c264c4d9ab4210c0",
+      measurementId: "G-MFFJNL1VRQ"
+    };
+
+    // Firebase 및 데이터베이스 초기화
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // 전역 상태 변수
+    window.itineraryData = { 1: [] };
+    window.currentDay = 1;
+    window.currentRoomId = "";
+    window.selectedPlaceData = null;
 
     let map;
     let autocomplete;
@@ -340,20 +415,87 @@
     let directionsService;
     let directionsRenderers = [];
     let draggedIndex = null;
+    let firebaseUnsubscribe = null;
 
-    function saveData() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(itineraryData));
+    // 랜덤 6자리 공유 코드 생성
+    function generateRoomId() {
+      return Math.random().toString(36).substring(2, 8).toUpperCase();
     }
 
-    function loadSavedData() {
-      const dataStr = localStorage.getItem(STORAGE_KEY);
-      if (dataStr) {
-        try { return JSON.parse(dataStr); } catch(e) { return null; }
+    // URL 파라미터 확인 및 Room ID 초기 설정
+    function initRoomId() {
+      const urlParams = new URLSearchParams(window.location.search);
+      let code = urlParams.get("code");
+      if (!code) {
+        code = localStorage.getItem("LAST_ROOM_CODE") || generateRoomId();
       }
-      return null;
+      setRoomId(code);
     }
 
-    function initMap() {
+    function setRoomId(code) {
+      window.currentRoomId = code;
+      document.getElementById("room-code-display").innerText = code;
+      localStorage.setItem("LAST_ROOM_CODE", code);
+
+      const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?code=' + code;
+      window.history.pushState({ path: newUrl }, '', newUrl);
+
+      listenToRoomData(code);
+    }
+
+    // Firebase 실시간 동기화 수신기
+    function listenToRoomData(roomId) {
+      if (firebaseUnsubscribe) firebaseUnsubscribe();
+
+      const roomRef = ref(db, "trips/" + roomId);
+      firebaseUnsubscribe = onValue(roomRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          window.itineraryData = data;
+        } else {
+          window.itineraryData = { 1: [] };
+          saveData();
+        }
+        renderDayTabs();
+        renderItinerary();
+      });
+    }
+
+    // Firebase 데이터 저장 함수
+    window.saveData = function() {
+      if (!window.currentRoomId) return;
+      const roomRef = ref(db, "trips/" + window.currentRoomId);
+      set(roomRef, window.itineraryData);
+    };
+
+    // 공유 링크 복사
+    window.copyShareLink = function() {
+      const shareUrl = window.location.href;
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        alert(`공유 링크가 복사되었습니다!\n스마트폰이나 다른 기기로 링크를 열어보세요.\n\n${shareUrl}`);
+      });
+    };
+
+    // 다른 공유 코드 입력
+    window.joinRoomByPrompt = function() {
+      const code = prompt("참여할 6자리 공유 코드를 입력하세요:");
+      if (code && code.trim() !== "") {
+        setRoomId(code.trim().toUpperCase());
+      }
+    };
+
+    // 새 일정 생성
+    window.createNewRoom = function() {
+      if (confirm("새로운 여행 일정을 만드시겠습니까?")) {
+        const newCode = generateRoomId();
+        setRoomId(newCode);
+      }
+    };
+
+    // 구글 지도 초기화
+    window.initMap = function() {
+      initRoomId();
+
       map = new google.maps.Map(document.getElementById("map"), {
         center: { lat: 35.6762, lng: 139.6503 },
         zoom: 11,
@@ -365,7 +507,6 @@
       geocoder = new google.maps.Geocoder();
       clickInfoWindow = new google.maps.InfoWindow();
 
-      // Autocomplete 연동
       const searchInput = document.getElementById("place-search");
       autocomplete = new google.maps.places.Autocomplete(searchInput);
       autocomplete.bindTo("bounds", map);
@@ -373,31 +514,30 @@
       autocomplete.addListener("place_changed", () => {
         const place = autocomplete.getPlace();
         if (!place.geometry || !place.geometry.location) {
-          selectedPlaceData = null;
+          window.selectedPlaceData = null;
           return;
         }
-        selectedPlaceData = {
+        window.selectedPlaceData = {
           name: place.name || place.formatted_address,
           lat: place.geometry.location.lat(),
           lng: place.geometry.location.lng()
         };
       });
 
-      // ⭐️ 지도 클릭 이벤트: 클릭한 위치 좌표로 장소 이름 검색 후 일정 추가 팝업 생성
+      // 지도 클릭 시 팝업으로 추가
       map.addListener("click", (e) => {
         const lat = e.latLng.lat();
         const lng = e.latLng.lng();
 
         geocoder.geocode({ location: { lat, lng } }, (results, status) => {
           if (status === "OK" && results[0]) {
-            // 주소 결과 중 구체적인 장소명 추출
             const placeName = results[0].address_components[0]?.long_name || results[0].formatted_address;
             
             const contentString = `
               <div style="padding: 4px; max-width: 200px;">
                 <b style="font-size:0.9rem;">${placeName}</b><br>
                 <button class="popup-add-btn" onclick="addClickPlace('${placeName.replace(/'/g, "\\'")}', ${lat}, ${lng})">
-                  Day ${currentDay}에 추가
+                  Day ${window.currentDay}에 추가
                 </button>
               </div>
             `;
@@ -411,10 +551,10 @@
 
       renderDayTabs();
       renderItinerary();
-    }
+    };
 
-    // 지도 클릭으로 장소 추가 함수
-    function addClickPlace(name, lat, lng) {
+    // 지도 클릭 시 선택된 장소 추가
+    window.addClickPlace = function(name, lat, lng) {
       const newPlace = {
         name: name,
         lat: lat,
@@ -423,115 +563,113 @@
         memo: ""
       };
 
-      if (!itineraryData[currentDay]) itineraryData[currentDay] = [];
-      itineraryData[currentDay].push(newPlace);
+      if (!window.itineraryData[window.currentDay]) window.itineraryData[window.currentDay] = [];
+      window.itineraryData[window.currentDay].push(newPlace);
       saveData();
 
       clickInfoWindow.close();
-      renderItinerary();
-    }
+    };
 
+    // Day 탭 렌더링
     function renderDayTabs() {
       const tabsEl = document.getElementById("day-tabs");
       tabsEl.innerHTML = "";
 
-      const days = Object.keys(itineraryData).map(Number).sort((a,b) => a - b);
+      const days = Object.keys(window.itineraryData).map(Number).sort((a,b) => a - b);
       days.forEach((day) => {
         const btn = document.createElement("button");
-        btn.className = `tab-btn ${day === currentDay ? 'active' : ''}`;
+        btn.className = `tab-btn ${day === window.currentDay ? 'active' : ''}`;
         btn.innerText = `Day ${day}`;
         btn.onclick = () => switchDay(day);
         tabsEl.appendChild(btn);
       });
     }
 
-    function addNewDay() {
-      const days = Object.keys(itineraryData).map(Number);
+    window.addNewDay = function() {
+      const days = Object.keys(window.itineraryData).map(Number);
       const newDayNumber = days.length > 0 ? Math.max(...days) + 1 : 1;
-      itineraryData[newDayNumber] = [];
+      window.itineraryData[newDayNumber] = [];
       saveData();
       switchDay(newDayNumber);
-    }
+    };
 
-    function deleteCurrentDay() {
-      const days = Object.keys(itineraryData).map(Number).sort((a,b) => a - b);
+    window.deleteCurrentDay = function() {
+      const days = Object.keys(window.itineraryData).map(Number).sort((a,b) => a - b);
       if (days.length <= 1) {
         alert("최소 1개의 Day는 유지되어야 합니다.");
         return;
       }
-      if (!confirm(`Day ${currentDay} 일정을 삭제하시겠습니까?`)) return;
+      if (!confirm(`Day ${window.currentDay} 일정을 삭제하시겠습니까?`)) return;
 
-      delete itineraryData[currentDay];
+      delete window.itineraryData[window.currentDay];
       
-      const remainingDays = Object.keys(itineraryData).map(Number).sort((a,b) => a - b);
+      const remainingDays = Object.keys(window.itineraryData).map(Number).sort((a,b) => a - b);
       const newData = {};
       remainingDays.forEach((oldDay, idx) => {
-        newData[idx + 1] = itineraryData[oldDay];
+        newData[idx + 1] = window.itineraryData[oldDay];
       });
-      itineraryData = newData;
+      window.itineraryData = newData;
       
       saveData();
       switchDay(1);
-    }
+    };
 
     function switchDay(day) {
-      currentDay = day;
+      window.currentDay = day;
       if (clickInfoWindow) clickInfoWindow.close();
       renderDayTabs();
       renderItinerary();
     }
 
-    function addSelectedPlace() {
+    // 장소 추가
+    window.addSelectedPlace = function() {
       const inputEl = document.getElementById("place-search");
 
-      if (!selectedPlaceData && inputEl.value.trim() !== "") {
+      if (!window.selectedPlaceData && inputEl.value.trim() !== "") {
         alert("검색 결과 목록에서 장소를 선택해 주세요.");
         return;
       }
-      if (!selectedPlaceData) return;
+      if (!window.selectedPlaceData) return;
 
       const newPlace = {
-        name: selectedPlaceData.name,
-        lat: selectedPlaceData.lat,
-        lng: selectedPlaceData.lng,
+        name: window.selectedPlaceData.name,
+        lat: window.selectedPlaceData.lat,
+        lng: window.selectedPlaceData.lng,
         travelMode: "TRANSIT",
         memo: ""
       };
 
-      if (!itineraryData[currentDay]) itineraryData[currentDay] = [];
-      itineraryData[currentDay].push(newPlace);
+      if (!window.itineraryData[window.currentDay]) window.itineraryData[window.currentDay] = [];
+      window.itineraryData[window.currentDay].push(newPlace);
       saveData();
 
       inputEl.value = "";
-      selectedPlaceData = null;
+      window.selectedPlaceData = null;
+    };
 
-      renderItinerary();
-    }
-
-    function deletePlace(index) {
-      itineraryData[currentDay].splice(index, 1);
+    window.deletePlace = function(index) {
+      window.itineraryData[window.currentDay].splice(index, 1);
       saveData();
-      renderItinerary();
-    }
+    };
 
-    function updateMemo(index, text) {
-      itineraryData[currentDay][index].memo = text;
+    window.updateMemo = function(index, text) {
+      window.itineraryData[window.currentDay][index].memo = text;
       saveData();
-    }
+    };
 
-    function changeTravelMode(index, mode) {
-      itineraryData[currentDay][index].travelMode = mode;
+    window.changeTravelMode = function(index, mode) {
+      window.itineraryData[window.currentDay][index].travelMode = mode;
       saveData();
-      updateRoutes();
-    }
+    };
 
+    // 화면 및 경로 update
     function renderItinerary() {
       clearMapElements();
 
       const listEl = document.getElementById("itinerary-list");
       listEl.innerHTML = "";
 
-      const places = itineraryData[currentDay] || [];
+      const places = window.itineraryData[window.currentDay] || [];
 
       if (places.length === 0) {
         listEl.innerHTML = `
@@ -609,7 +747,9 @@
         markers.push(marker);
       });
 
-      map.fitBounds(bounds);
+      if (places.length > 0) {
+        map.fitBounds(bounds);
+      }
       updateRoutes();
     }
 
@@ -629,12 +769,11 @@
       const targetIndex = parseInt(this.dataset.index);
       if (draggedIndex === null || draggedIndex === targetIndex) return;
 
-      const places = itineraryData[currentDay];
+      const places = window.itineraryData[window.currentDay];
       const draggedItem = places.splice(draggedIndex, 1)[0];
       places.splice(targetIndex, 0, draggedItem);
 
       saveData();
-      renderItinerary();
     }
 
     function handleDragEnd() {
@@ -653,7 +792,7 @@
       directionsRenderers.forEach(r => r.setMap(null));
       directionsRenderers = [];
 
-      const places = itineraryData[currentDay] || [];
+      const places = window.itineraryData[window.currentDay] || [];
 
       for (let i = 0; i < places.length - 1; i++) {
         const origin = { lat: places[i].lat, lng: places[i].lng };
@@ -696,7 +835,7 @@
     }
   </script>
 
-  <!-- Google Maps API (Places, Geocoding 라이브러리 연동) -->
+  <!-- Google Maps API -->
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBcOf0j2OzccT8-lzWiXpljkw4_6cgGub0&libraries=places&callback=initMap" async defer></script>
 </body>
 </html>
