@@ -385,7 +385,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-    // 🎯 전달해주신 Firebase SDK 정보 적용 완료
+    // Firebase SDK 설정
     const firebaseConfig = {
       apiKey: "AIzaSyAJePue4OmEXE2QJpl3C6dC6JlZc_6Gte0",
       authDomain: "trip-6e033.firebaseapp.com",
@@ -492,7 +492,7 @@
       }
     };
 
-    // 구글 지도 초기화
+    // 구글 지도 초기화 (window 전역에 바인딩하여 Google Maps callback 문제 해결)
     window.initMap = function() {
       initRoomId();
 
