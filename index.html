@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>일본 여행 일정 플래너 (Google Maps)</title>
+  <title>일본 여행 일정 플래너 v0.3</title>
   
   <style>
     * {
@@ -17,7 +17,7 @@
       background-color: #f8f9fa;
     }
     
-    /* 앱 헤더 */
+    /* 헤더 */
     header {
       background-color: #1a73e8;
       color: #fff;
@@ -28,21 +28,21 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     header h2 {
-      font-size: 1.2rem;
+      font-size: 1.1rem;
     }
 
-    /* 메인 레이아웃 (PC/태블릿: 2열 배치) */
+    /* 메인 컨테이너 */
     .app-container {
       display: flex;
       flex-direction: row;
-      height: calc(100vh - 56px);
+      height: calc(100vh - 54px);
       overflow: hidden;
     }
 
-    /* 사이드바: 일정 목록 */
+    /* 사이드바 */
     .sidebar {
-      width: 380px;
-      min-width: 320px;
+      width: 400px;
+      min-width: 330px;
       background: #ffffff;
       border-right: 1px solid #e0e0e0;
       display: flex;
@@ -50,63 +50,110 @@
       z-index: 10;
     }
 
-    .controls-panel {
-      padding: 10px;
+    /* 검색 및 입력 영역 */
+    .search-panel {
+      padding: 12px;
       background: #f1f3f5;
       border-bottom: 1px solid #ddd;
+      display: flex;
+      gap: 6px;
     }
-    .travel-mode-select {
-      width: 100%;
-      padding: 8px;
-      border-radius: 6px;
+    .search-input {
+      flex: 1;
+      padding: 9px 12px;
       border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: #1a73e8;
+    }
+    .btn-add {
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+      padding: 0 14px;
+      border-radius: 6px;
       font-weight: bold;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .btn-add:hover {
+      background-color: #1557b0;
     }
 
-    .day-tabs {
+    /* Day 탭 Bar */
+    .day-bar {
       display: flex;
+      align-items: center;
       background: #e9ecef;
       border-bottom: 1px solid #ddd;
+      overflow-x: auto;
+    }
+    .day-tabs {
+      display: flex;
+      flex: 1;
+      overflow-x: auto;
     }
     .tab-btn {
-      flex: 1;
-      padding: 12px 8px;
+      padding: 10px 14px;
       border: none;
       background: none;
       font-weight: bold;
       cursor: pointer;
       color: #555;
+      white-space: nowrap;
+      font-size: 0.85rem;
     }
     .tab-btn.active {
       background: #fff;
       color: #1a73e8;
       border-bottom: 3px solid #1a73e8;
     }
+    .btn-add-day {
+      background: none;
+      border: none;
+      padding: 8px 12px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      color: #1a73e8;
+      font-weight: bold;
+    }
 
+    /* 일정 목록 */
     .itinerary-list {
       flex: 1;
       overflow-y: auto;
       padding: 1rem;
     }
+    .empty-msg {
+      text-align: center;
+      color: #888;
+      margin-top: 40px;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
 
+    /* 장소 카드 */
     .place-card {
       background: #fff;
       border: 1px solid #e0e0e0;
       border-radius: 8px;
       padding: 12px;
-      margin-bottom: 12px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.03);
       cursor: pointer;
-      transition: all 0.2s ease;
-    }
-    .place-card:hover {
-      border-color: #1a73e8;
-      transform: translateY(-2px);
+      position: relative;
     }
     .place-header {
       display: flex;
       align-items: center;
-      margin-bottom: 4px;
+      justify-content: space-between;
+    }
+    .place-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
     .place-index {
       background: #1a73e8;
@@ -119,29 +166,49 @@
       justify-content: center;
       font-size: 0.8rem;
       font-weight: bold;
-      margin-right: 8px;
     }
     .place-title {
       font-weight: bold;
-      font-size: 1rem;
+      font-size: 0.95rem;
       color: #111;
     }
-    .place-info {
-      font-size: 0.85rem;
-      color: #666;
-      margin-left: 30px;
-      margin-bottom: 6px;
+    .btn-delete {
+      background: none;
+      border: none;
+      color: #999;
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 2px 6px;
     }
-    .route-info {
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px dashed #eee;
-      font-size: 0.8rem;
-      color: #e65100;
-      font-weight: bold;
+    .btn-delete:hover {
+      color: #d9381e;
+    }
+
+    /* 구간 이동 설정 영역 */
+    .leg-connector {
+      margin: 8px 0 8px 11px;
+      padding-left: 15px;
+      border-left: 2px dashed #ccc;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .mode-selector {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
+    }
+    .mode-select {
+      padding: 3px 6px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 0.78rem;
+      background: #fff;
+    }
+    .route-detail {
+      font-size: 0.78rem;
+      color: #e65100;
+      font-weight: bold;
     }
 
     /* 지도 영역 */
@@ -154,7 +221,7 @@
       height: 100%;
     }
 
-    /* 모바일 대응 (768px 이하: 지도 상단, 일정 하단) */
+    /* 모바일 대응 */
     @media (max-width: 768px) {
       .app-container {
         flex-direction: column-reverse;
@@ -172,28 +239,25 @@
 <body>
 
   <header>
-    <h2>🗾 Japan Trip Planner v0.2</h2>
+    <h2>🗾 Japan Trip Planner v0.3</h2>
   </header>
 
   <div class="app-container">
-    <!-- 사이드바 -->
     <div class="sidebar">
-      <div class="controls-panel">
-        <select id="travel-mode" class="travel-mode-select" onchange="updateRoute()">
-          <option value="TRANSIT">🚌 대중교통 (지하철/버스)</option>
-          <option value="WALKING">🚶 도보</option>
-          <option value="DRIVING">🚗 자동차</option>
-        </select>
+      <!-- 장소 검색창 -->
+      <div class="search-panel">
+        <input type="text" id="place-search" class="search-input" placeholder="장소 검색 (예: 도쿄 타워, 오사카성)">
+        <button class="btn-add" onclick="addSelectedPlace()">추가</button>
       </div>
 
-      <div class="day-tabs">
-        <button class="tab-btn active" onclick="switchDay(1)">Day 1 (도쿄 중심)</button>
-        <button class="tab-btn" onclick="switchDay(2)">Day 2 (아사쿠사/시부야)</button>
+      <!-- 일자 (Day) 탭 바 -->
+      <div class="day-bar">
+        <div class="day-tabs" id="day-tabs"></div>
+        <button class="btn-add-day" onclick="addNewDay()" title="일자 추가">+</button>
       </div>
 
-      <div class="itinerary-list" id="itinerary-list">
-        <!-- JS 동적 생성 -->
-      </div>
+      <!-- 일정 목록 -->
+      <div class="itinerary-list" id="itinerary-list"></div>
     </div>
 
     <!-- 구글 지도 -->
@@ -203,171 +267,253 @@
   </div>
 
   <script>
-    // 샘플 일정 데이터 (위도, 경도)
-    const itineraryData = {
-      1: [
-        { name: "도쿄역", desc: "도쿄 여행의 시작점 & 라멘 스트리트", lat: 35.681236, lng: 139.767125 },
-        { name: "긴자 거리", desc: "쇼핑 및 명품 거리 탐방", lat: 35.671989, lng: 139.763965 },
-        { name: "도쿄 타워", desc: "상징적인 야경 전망대", lat: 35.658580, lng: 139.745433 }
-      ],
-      2: [
-        { name: "아사쿠사 센소지", desc: "도쿄 전통 사찰", lat: 35.714765, lng: 139.796655 },
-        { name: "시부야 스크램블 교차로", desc: "분주한 교차로 & 쇼핑", lat: 35.659500, lng: 139.700550 }
-      ]
+    // 일자별 일정 데이터 관리 (초기 빈 상태)
+    let itineraryData = {
+      1: []
     };
+    let currentDay = 1;
+    let selectedPlaceData = null; // 검색창에서 선택된 장소 temp 저장
 
     let map;
-    let currentDay = 1;
+    let autocomplete;
     let markers = [];
     let directionsService;
     let directionsRenderers = [];
 
-    // 구글 맵 초기화 함수 (콜백 실행)
+    // 지도 초기화
     function initMap() {
-      // 1. 지도 생성 (도쿄 중심)
+      // 일본 도쿄 기본 중심
       map = new google.maps.Map(document.getElementById("map"), {
         center: { lat: 35.6762, lng: 139.6503 },
-        zoom: 12,
+        zoom: 11,
         mapTypeControl: false,
         streetViewControl: false
       });
 
-      // 2. 경로 서비스 초기화
       directionsService = new google.maps.DirectionsService();
 
-      // 3. 첫 날 일정 표시
-      switchDay(1);
-    }
+      // Autocomplete (장소 검색) 연동
+      const searchInput = document.getElementById("place-search");
+      autocomplete = new google.maps.places.Autocomplete(searchInput);
+      autocomplete.bindTo("bounds", map);
 
-    // 날짜 변경
-    function switchDay(day) {
-      currentDay = day;
-
-      // 탭 스타일 활성화
-      document.querySelectorAll('.tab-btn').forEach((btn, idx) => {
-        btn.classList.toggle('active', idx === day - 1);
+      // 검색목록에서 장소 선택 시 이벤트
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        if (!place.geometry || !place.geometry.location) {
+          selectedPlaceData = null;
+          return;
+        }
+        selectedPlaceData = {
+          name: place.name || place.formatted_address,
+          lat: place.geometry.location.lat(),
+          lng: place.geometry.location.lng()
+        };
       });
 
-      // 기존 경로 및 마커 초기화
+      renderDayTabs();
+      renderItinerary();
+    }
+
+    // Day 탭 렌더링
+    function renderDayTabs() {
+      const tabsEl = document.getElementById("day-tabs");
+      tabsEl.innerHTML = "";
+
+      Object.keys(itineraryData).forEach((dayStr) => {
+        const day = parseInt(dayStr);
+        const btn = document.createElement("button");
+        btn.className = `tab-btn ${day === currentDay ? 'active' : ''}`;
+        btn.innerText = `Day ${day}`;
+        btn.onclick = () => switchDay(day);
+        tabsEl.appendChild(btn);
+      });
+    }
+
+    // Day 추가
+    function addNewDay() {
+      const newDayNumber = Object.keys(itineraryData).length + 1;
+      itineraryData[newDayNumber] = [];
+      switchDay(newDayNumber);
+    }
+
+    // Day 전환
+    function switchDay(day) {
+      currentDay = day;
+      renderDayTabs();
+      renderItinerary();
+    }
+
+    // 장소 추가 함수
+    function addSelectedPlace() {
+      const inputEl = document.getElementById("place-search");
+
+      if (!selectedPlaceData && inputEl.value.trim() !== "") {
+        alert("검색 결과 목록에서 장소를 선택해 주세요.");
+        return;
+      }
+      if (!selectedPlaceData) return;
+
+      // 추가되는 장소 데이터 (기본 이동수단: TRANSIT)
+      const newPlace = {
+        name: selectedPlaceData.name,
+        lat: selectedPlaceData.lat,
+        lng: selectedPlaceData.lng,
+        travelMode: "TRANSIT" // 다음 장소로 갈 때 사용할 수단
+      };
+
+      itineraryData[currentDay].push(newPlace);
+      
+      // 입력창 초기화
+      inputEl.value = "";
+      selectedPlaceData = null;
+
+      renderItinerary();
+    }
+
+    // 장소 삭제
+    function deletePlace(index) {
+      itineraryData[currentDay].splice(index, 1);
+      renderItinerary();
+    }
+
+    // 이동 수단 변경 (수동 선택)
+    function changeTravelMode(index, mode) {
+      itineraryData[currentDay][index].travelMode = mode;
+      updateRoutes();
+    }
+
+    // 일정 및 지도 마커 렌더링
+    function renderItinerary() {
       clearMapElements();
 
-      // 장소 렌더링 및 경로 그리기
-      renderItineraryList();
-      updateRoute();
-    }
-
-    // 기존 맵 요소 삭제
-    function clearMapElements() {
-      markers.forEach(m => m.setMap(null));
-      markers = [];
-
-      directionsRenderers.forEach(r => r.setMap(null));
-      directionsRenderers = [];
-    }
-
-    // 일정 목록 사이드바 렌더링
-    function renderItineraryList() {
-      const listEl = document.getElementById('itinerary-list');
-      listEl.innerHTML = '';
+      const listEl = document.getElementById("itinerary-list");
+      listEl.innerHTML = "";
 
       const places = itineraryData[currentDay];
+
+      if (places.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-msg">
+            📍 상단 검색창에 방문할 장소를 입력하고<br><b>[추가]</b> 버튼을 눌러 일정을 채워보세요.
+          </div>
+        `;
+        return;
+      }
+
       const bounds = new google.maps.LatLngBounds();
 
-      places.forEach((place, index) => {
+      places.forEach((place, idx) => {
         const position = { lat: place.lat, lng: place.lng };
         bounds.extend(position);
 
-        // 카드 엘리먼트 생성
-        const card = document.createElement('div');
-        card.className = 'place-card';
-        card.id = `place-card-${index}`;
-        card.innerHTML = `
-          <div class="place-header">
-            <div class="place-index">${index + 1}</div>
-            <div class="place-title">${place.name}</div>
-          </div>
-          <div class="place-info">${place.desc}</div>
-          <div class="route-info" id="route-info-${index}" style="display: none;"></div>
-        `;
-
-        card.onclick = () => {
+        // 장소 카드 뷰 생성
+        const card = document.createElement("div");
+        card.className = "place-card";
+        card.onclick = (e) => {
+          if (e.target.tagName === 'SELECT' || e.target.tagName === 'BUTTON') return;
           map.panTo(position);
           map.setZoom(15);
         };
 
+        card.innerHTML = `
+          <div class="place-header">
+            <div class="place-title-wrap">
+              <div class="place-index">${idx + 1}</div>
+              <div class="place-title">${place.name}</div>
+            </div>
+            <button class="btn-delete" onclick="deletePlace(${idx})" title="삭제">✕</button>
+          </div>
+        `;
+
         listEl.appendChild(card);
 
-        // 구글 지도 마커 생성
+        // 다음 장소가 있을 경우 이동방법 수동선택 커넥터 추가
+        if (idx < places.length - 1) {
+          const connector = document.createElement("div");
+          connector.className = "leg-connector";
+          connector.innerHTML = `
+            <div class="mode-selector">
+              <span style="font-size:0.75rem; color:#666;">이동방법:</span>
+              <select class="mode-select" onchange="changeTravelMode(${idx}, this.value)">
+                <option value="TRANSIT" ${place.travelMode === 'TRANSIT' ? 'selected' : ''}>🚌 대중교통</option>
+                <option value="WALKING" ${place.travelMode === 'WALKING' ? 'selected' : ''}>🚶 도보</option>
+                <option value="DRIVING" ${place.travelMode === 'DRIVING' ? 'selected' : ''}>🚗 차</option>
+              </select>
+            </div>
+            <div class="route-detail" id="route-detail-${idx}">계산 중...</div>
+          `;
+          listEl.appendChild(connector);
+        }
+
+        // 지도 마커 생성
         const marker = new google.maps.Marker({
           position: position,
           map: map,
-          title: place.name,
-          label: `${index + 1}`
+          label: `${idx + 1}`
         });
 
         const infoWindow = new google.maps.InfoWindow({
-          content: `<b>${index + 1}. ${place.name}</b><br>${place.desc}`
+          content: `<b>${idx + 1}. ${place.name}</b>`
         });
 
-        marker.addListener("click", () => {
-          infoWindow.open(map, marker);
-        });
-
+        marker.addListener("click", () => infoWindow.open(map, marker));
         markers.push(marker);
       });
 
       map.fitBounds(bounds);
+      updateRoutes();
     }
 
-    // 경로 업데이트 (Directions API 호출)
-    function updateRoute() {
+    // 지도 요소(마커/경로) 초기화
+    function clearMapElements() {
+      markers.forEach(m => m.setMap(null));
+      markers = [];
+      directionsRenderers.forEach(r => r.setMap(null));
+      directionsRenderers = [];
+    }
+
+    // 각 구간별 경로 탐색 수행
+    function updateRoutes() {
       // 기존 경로선 지우기
       directionsRenderers.forEach(r => r.setMap(null));
       directionsRenderers = [];
 
       const places = itineraryData[currentDay];
-      const selectedMode = document.getElementById('travel-mode').value;
 
-      // 장소가 2개 이상일 때 구간별 경로 계산
       for (let i = 0; i < places.length - 1; i++) {
         const origin = { lat: places[i].lat, lng: places[i].lng };
         const destination = { lat: places[i + 1].lat, lng: places[i + 1].lng };
+        const mode = places[i].travelMode || "TRANSIT";
 
         const renderer = new google.maps.DirectionsRenderer({
           map: map,
-          suppressMarkers: true, // 기본 마커 대신 커스텀 마커 유지
+          suppressMarkers: true,
           polylineOptions: {
-            strokeColor: "#1a73e8",
+            strokeColor: mode === 'WALKING' ? '#4CAF50' : (mode === 'DRIVING' ? '#FF9800' : '#1a73e8'),
             strokeWeight: 5,
             strokeOpacity: 0.8
           }
         });
         directionsRenderers.push(renderer);
 
-        // Directions API 호출
         directionsService.route(
           {
             origin: origin,
             destination: destination,
-            travelMode: google.maps.TravelMode[selectedMode]
+            travelMode: google.maps.TravelMode[mode]
           },
           (result, status) => {
+            const detailEl = document.getElementById(`route-detail-${i}`);
             if (status === "OK") {
               renderer.setDirections(result);
-              
-              // 소요 시간 및 거리 정보 표시
               const leg = result.routes[0].legs[0];
-              const infoEl = document.getElementById(`route-info-${i}`);
-              if (infoEl) {
-                infoEl.style.display = "flex";
-                infoEl.innerHTML = `⬇️ 다음 장소까지: 약 ${leg.duration.text} (${leg.distance.text})`;
+              if (detailEl) {
+                detailEl.innerHTML = `약 ${leg.duration.text} (${leg.distance.text})`;
               }
             } else {
-              console.warn(`경로 검색 실패 (${places[i].name} -> ${places[i+1].name}): ${status}`);
-              const infoEl = document.getElementById(`route-info-${i}`);
-              if (infoEl) {
-                infoEl.style.display = "flex";
-                infoEl.innerHTML = `⬇️ 경로 정보를 불러올 수 없음`;
+              if (detailEl) {
+                detailEl.innerHTML = `경로 정보 없음`;
               }
             }
           }
@@ -376,7 +522,7 @@
     }
   </script>
 
-  <!-- Google Maps JavaScript API 동적 로드 (키가 적용됨) -->
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBcOf0j2OzccT8-lzWiXpljkw4_6cgGub0&callback=initMap" async defer></script>
+  <!-- Google Maps API (Places 라이브러리 포함) -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBcOf0j2OzccT8-lzWiXpljkw4_6cgGub0&libraries=places&callback=initMap" async defer></script>
 </body>
 </html>
