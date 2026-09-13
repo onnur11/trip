@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>일본 여행 일정 플래너 v0.3</title>
+  <title>일본 여행 일정 플래너 v0.4</title>
   
   <style>
     * {
@@ -41,8 +41,8 @@
 
     /* 사이드바 */
     .sidebar {
-      width: 400px;
-      min-width: 330px;
+      width: 420px;
+      min-width: 340px;
       background: #ffffff;
       border-right: 1px solid #e0e0e0;
       display: flex;
@@ -89,7 +89,6 @@
       align-items: center;
       background: #e9ecef;
       border-bottom: 1px solid #ddd;
-      overflow-x: auto;
     }
     .day-tabs {
       display: flex;
@@ -111,15 +110,20 @@
       color: #1a73e8;
       border-bottom: 3px solid #1a73e8;
     }
-    .btn-add-day {
+    .day-actions {
+      display: flex;
+      align-items: center;
+    }
+    .btn-add-day, .btn-del-day {
       background: none;
       border: none;
-      padding: 8px 12px;
-      font-size: 1.1rem;
+      padding: 8px 10px;
+      font-size: 1rem;
       cursor: pointer;
-      color: #1a73e8;
       font-weight: bold;
     }
+    .btn-add-day { color: #1a73e8; }
+    .btn-del-day { color: #d9381e; }
 
     /* 일정 목록 */
     .itinerary-list {
@@ -135,25 +139,42 @@
       line-height: 1.5;
     }
 
-    /* 장소 카드 */
+    /* 장소 카드 & 드래그 앤 드롭 스타일 */
     .place-card {
       background: #fff;
       border: 1px solid #e0e0e0;
       border-radius: 8px;
       padding: 12px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.03);
-      cursor: pointer;
       position: relative;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+    .place-card.dragging {
+      opacity: 0.4;
+      border: 2px dashed #1a73e8;
     }
     .place-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      margin-bottom: 8px;
     }
     .place-title-wrap {
       display: flex;
       align-items: center;
       gap: 8px;
+      flex: 1;
+    }
+    .drag-handle {
+      cursor: grab;
+      color: #aaa;
+      font-weight: bold;
+      font-size: 1.2rem;
+      padding: 0 4px;
+      user-select: none;
+    }
+    .drag-handle:active {
+      cursor: grabbing;
     }
     .place-index {
       background: #1a73e8;
@@ -171,6 +192,7 @@
       font-weight: bold;
       font-size: 0.95rem;
       color: #111;
+      word-break: break-all;
     }
     .btn-delete {
       background: none;
@@ -184,9 +206,27 @@
       color: #d9381e;
     }
 
+    /* 메모 입력창 */
+    .memo-box {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #eee;
+      border-radius: 4px;
+      font-size: 0.82rem;
+      background: #fafafa;
+      resize: vertical;
+      min-height: 36px;
+      outline: none;
+      font-family: inherit;
+    }
+    .memo-box:focus {
+      background: #fff;
+      border-color: #1a73e8;
+    }
+
     /* 구간 이동 설정 영역 */
     .leg-connector {
-      margin: 8px 0 8px 11px;
+      margin: 8px 0 8px 15px;
       padding-left: 15px;
       border-left: 2px dashed #ccc;
       display: flex;
@@ -239,7 +279,7 @@
 <body>
 
   <header>
-    <h2>🗾 Japan Trip Planner v0.3</h2>
+    <h2>🗾 Japan Trip Planner v0.4</h2>
   </header>
 
   <div class="app-container">
@@ -253,7 +293,10 @@
       <!-- 일자 (Day) 탭 바 -->
       <div class="day-bar">
         <div class="day-tabs" id="day-tabs"></div>
-        <button class="btn-add-day" onclick="addNewDay()" title="일자 추가">+</button>
+        <div class="day-actions">
+          <button class="btn-add-day" onclick="addNewDay()" title="일자 추가">+</button>
+          <button class="btn-del-day" onclick="deleteCurrentDay()" title="현재 Day 삭제">🗑️</button>
+        </div>
       </div>
 
       <!-- 일정 목록 -->
@@ -267,22 +310,35 @@
   </div>
 
   <script>
-    // 일자별 일정 데이터 관리 (초기 빈 상태)
-    let itineraryData = {
-      1: []
-    };
+    // 로컬스토리지에서 기존 저장 데이터 로드 (없을 시 기본 구조 초기화)
+    const STORAGE_KEY = "JAPAN_TRIP_PLANNER_DATA";
+    let itineraryData = loadSavedData() || { 1: [] };
     let currentDay = 1;
-    let selectedPlaceData = null; // 검색창에서 선택된 장소 temp 저장
+    let selectedPlaceData = null;
 
     let map;
     let autocomplete;
     let markers = [];
     let directionsService;
     let directionsRenderers = [];
+    let draggedIndex = null; // 드래그 상태 관리
 
-    // 지도 초기화
+    // 데이터 로컬스토리지 저장 함수
+    function saveData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(itineraryData));
+    }
+
+    // 데이터 불어오기 함수
+    function loadSavedData() {
+      const dataStr = localStorage.getItem(STORAGE_KEY);
+      if (dataStr) {
+        try { return JSON.parse(dataStr); } catch(e) { return null; }
+      }
+      return null;
+    }
+
+    // 구글 지도 초기화
     function initMap() {
-      // 일본 도쿄 기본 중심
       map = new google.maps.Map(document.getElementById("map"), {
         center: { lat: 35.6762, lng: 139.6503 },
         zoom: 11,
@@ -297,7 +353,6 @@
       autocomplete = new google.maps.places.Autocomplete(searchInput);
       autocomplete.bindTo("bounds", map);
 
-      // 검색목록에서 장소 선택 시 이벤트
       autocomplete.addListener("place_changed", () => {
         const place = autocomplete.getPlace();
         if (!place.geometry || !place.geometry.location) {
@@ -320,8 +375,8 @@
       const tabsEl = document.getElementById("day-tabs");
       tabsEl.innerHTML = "";
 
-      Object.keys(itineraryData).forEach((dayStr) => {
-        const day = parseInt(dayStr);
+      const days = Object.keys(itineraryData).map(Number).sort((a,b) => a - b);
+      days.forEach((day) => {
         const btn = document.createElement("button");
         btn.className = `tab-btn ${day === currentDay ? 'active' : ''}`;
         btn.innerText = `Day ${day}`;
@@ -332,9 +387,34 @@
 
     // Day 추가
     function addNewDay() {
-      const newDayNumber = Object.keys(itineraryData).length + 1;
+      const days = Object.keys(itineraryData).map(Number);
+      const newDayNumber = days.length > 0 ? Math.max(...days) + 1 : 1;
       itineraryData[newDayNumber] = [];
+      saveData();
       switchDay(newDayNumber);
+    }
+
+    // 현재 Day 삭제
+    function deleteCurrentDay() {
+      const days = Object.keys(itineraryData).map(Number).sort((a,b) => a - b);
+      if (days.length <= 1) {
+        alert("최소 1개의 Day는 유지되어야 합니다.");
+        return;
+      }
+      if (!confirm(`Day ${currentDay} 일정을 삭제하시겠습니까?`)) return;
+
+      delete itineraryData[currentDay];
+      
+      // key 재정렬 (1, 2, 3...)
+      const remainingDays = Object.keys(itineraryData).map(Number).sort((a,b) => a - b);
+      const newData = {};
+      remainingDays.forEach((oldDay, idx) => {
+        newData[idx + 1] = itineraryData[oldDay];
+      });
+      itineraryData = newData;
+      
+      saveData();
+      switchDay(1);
     }
 
     // Day 전환
@@ -344,7 +424,7 @@
       renderItinerary();
     }
 
-    // 장소 추가 함수
+    // 장소 추가
     function addSelectedPlace() {
       const inputEl = document.getElementById("place-search");
 
@@ -354,17 +434,18 @@
       }
       if (!selectedPlaceData) return;
 
-      // 추가되는 장소 데이터 (기본 이동수단: TRANSIT)
       const newPlace = {
         name: selectedPlaceData.name,
         lat: selectedPlaceData.lat,
         lng: selectedPlaceData.lng,
-        travelMode: "TRANSIT" // 다음 장소로 갈 때 사용할 수단
+        travelMode: "TRANSIT",
+        memo: ""
       };
 
+      if (!itineraryData[currentDay]) itineraryData[currentDay] = [];
       itineraryData[currentDay].push(newPlace);
-      
-      // 입력창 초기화
+      saveData();
+
       inputEl.value = "";
       selectedPlaceData = null;
 
@@ -374,12 +455,20 @@
     // 장소 삭제
     function deletePlace(index) {
       itineraryData[currentDay].splice(index, 1);
+      saveData();
       renderItinerary();
     }
 
-    // 이동 수단 변경 (수동 선택)
+    // 메모 업데이트
+    function updateMemo(index, text) {
+      itineraryData[currentDay][index].memo = text;
+      saveData();
+    }
+
+    // 이동 수단 변경
     function changeTravelMode(index, mode) {
       itineraryData[currentDay][index].travelMode = mode;
+      saveData();
       updateRoutes();
     }
 
@@ -390,7 +479,7 @@
       const listEl = document.getElementById("itinerary-list");
       listEl.innerHTML = "";
 
-      const places = itineraryData[currentDay];
+      const places = itineraryData[currentDay] || [];
 
       if (places.length === 0) {
         listEl.innerHTML = `
@@ -407,11 +496,20 @@
         const position = { lat: place.lat, lng: place.lng };
         bounds.extend(position);
 
-        // 장소 카드 뷰 생성
+        // 장소 카드 엘리먼트 (드래그 가능 설정)
         const card = document.createElement("div");
         card.className = "place-card";
+        card.draggable = true;
+        card.dataset.index = idx;
+
+        // 드래그앤드롭 이벤트 바인딩
+        card.addEventListener("dragstart", handleDragStart);
+        card.addEventListener("dragover", handleDragOver);
+        card.addEventListener("drop", handleDrop);
+        card.addEventListener("dragend", handleDragEnd);
+
         card.onclick = (e) => {
-          if (e.target.tagName === 'SELECT' || e.target.tagName === 'BUTTON') return;
+          if (['TEXTAREA', 'SELECT', 'BUTTON', 'SPAN'].includes(e.target.tagName)) return;
           map.panTo(position);
           map.setZoom(15);
         };
@@ -419,16 +517,18 @@
         card.innerHTML = `
           <div class="place-header">
             <div class="place-title-wrap">
+              <span class="drag-handle" title="드래그하여 순서 변경">⋮⋮</span>
               <div class="place-index">${idx + 1}</div>
               <div class="place-title">${place.name}</div>
             </div>
             <button class="btn-delete" onclick="deletePlace(${idx})" title="삭제">✕</button>
           </div>
+          <textarea class="memo-box" placeholder="메모 입력 (예: 예상 비용, 예약시간 등)" onchange="updateMemo(${idx}, this.value)">${place.memo || ''}</textarea>
         `;
 
         listEl.appendChild(card);
 
-        // 다음 장소가 있을 경우 이동방법 수동선택 커넥터 추가
+        // 구간 이동 수단 설정 커넥터
         if (idx < places.length - 1) {
           const connector = document.createElement("div");
           connector.className = "leg-connector";
@@ -446,7 +546,7 @@
           listEl.appendChild(connector);
         }
 
-        // 지도 마커 생성
+        // 구글 지도 마커 생성
         const marker = new google.maps.Marker({
           position: position,
           map: map,
@@ -454,7 +554,7 @@
         });
 
         const infoWindow = new google.maps.InfoWindow({
-          content: `<b>${idx + 1}. ${place.name}</b>`
+          content: `<b>${idx + 1}. ${place.name}</b>${place.memo ? `<br><small style="color:#666;">${place.memo}</small>` : ''}`
         });
 
         marker.addListener("click", () => infoWindow.open(map, marker));
@@ -465,7 +565,38 @@
       updateRoutes();
     }
 
-    // 지도 요소(마커/경로) 초기화
+    /* --- 드래그 앤 드롭 핸들러 --- */
+    function handleDragStart(e) {
+      draggedIndex = parseInt(this.dataset.index);
+      this.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      const targetIndex = parseInt(this.dataset.index);
+      if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+      // 배열 순서 변경
+      const places = itineraryData[currentDay];
+      const draggedItem = places.splice(draggedIndex, 1)[0];
+      places.splice(targetIndex, 0, draggedItem);
+
+      saveData();
+      renderItinerary();
+    }
+
+    function handleDragEnd() {
+      this.classList.remove("dragging");
+      draggedIndex = null;
+    }
+
+    // 지도 요소 초기화
     function clearMapElements() {
       markers.forEach(m => m.setMap(null));
       markers = [];
@@ -475,11 +606,10 @@
 
     // 각 구간별 경로 탐색 수행
     function updateRoutes() {
-      // 기존 경로선 지우기
       directionsRenderers.forEach(r => r.setMap(null));
       directionsRenderers = [];
 
-      const places = itineraryData[currentDay];
+      const places = itineraryData[currentDay] || [];
 
       for (let i = 0; i < places.length - 1; i++) {
         const origin = { lat: places[i].lat, lng: places[i].lng };
