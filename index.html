@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>일본 여행 일정 플래너 v0.7.2 (저장 이슈 완벽 수정)</title>
+  <title>일본 여행 일정 플래너 v0.7.3</title>
   
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -107,8 +107,8 @@
 <body>
 
   <header>
-    <h2>🗾 Japan Trip Planner v0.7.2</h2>
-    <span id="save-status" class="save-status saved">🟢 동기화됨</span>
+    <h2>🗾 Japan Trip Planner v0.7.3</h2>
+    <span id="save-status" class="save-status saved">🟢 저장 완료</span>
   </header>
 
   <div class="share-bar">
@@ -153,7 +153,7 @@
     const firebaseConfig = {
       apiKey: "AIzaSyAJePue4OmEXE2QJpl3C6dC6JlZc_6Gte0",
       authDomain: "trip-6e033.firebaseapp.com",
-      databaseURL: "https://trip-6e033-default-rtdb.asia-southeast1.firebasedatabase.app/",
+      databaseURL: "https://trip-6e033-default-rtdb.asia-southeast1.firebasedatabase.app",
       projectId: "trip-6e033",
       storageBucket: "trip-6e033.firebasestorage.app",
       messagingSenderId: "1050322632257",
@@ -178,7 +178,6 @@
     let directionsRenderers = [];
     let draggedIndex = null;
     let firebaseUnsubscribe = null;
-    let saveTimeout = null;
 
     function updateSaveStatus(status) {
       const el = document.getElementById("save-status");
@@ -241,13 +240,10 @@
       if (!currentRoomId) return;
       updateSaveStatus("saving");
       
-      clearTimeout(saveTimeout);
-      saveTimeout = setTimeout(() => {
-        const roomRef = ref(db, "trips/" + currentRoomId);
-        set(roomRef, itineraryData)
-          .then(() => updateSaveStatus("saved"))
-          .catch(() => updateSaveStatus("error"));
-      }, 300);
+      const roomRef = ref(db, "trips/" + currentRoomId);
+      set(roomRef, itineraryData)
+        .then(() => updateSaveStatus("saved"))
+        .catch(() => updateSaveStatus("error"));
     }
 
     // 버튼 이벤트 바인딩
@@ -274,9 +270,10 @@
     document.getElementById("btn-add-day").onclick = addNewDay;
     document.getElementById("btn-del-day").onclick = deleteCurrentDay;
 
-    // 일정 리스트 내부의 입력(input, select) 변경 시 이벤트 위임으로 수집
+    // 💡 변경된 핵심 영역: 엔터를 치거나 포커스를 잃을 때(change) 데이터를 저장하도록 수정
     const listEl = document.getElementById("itinerary-list");
-    listEl.addEventListener("input", (e) => {
+    
+    listEl.addEventListener("change", (e) => {
       const target = e.target;
       const index = parseInt(target.dataset.index);
       if (isNaN(index)) return;
@@ -290,15 +287,7 @@
       } else if (target.classList.contains("custom-route-input")) {
         itineraryData[currentDay][index].customRouteInfo = target.value;
         saveData();
-      }
-    });
-
-    listEl.addEventListener("change", (e) => {
-      const target = e.target;
-      const index = parseInt(target.dataset.index);
-      if (isNaN(index)) return;
-
-      if (target.classList.contains("mode-select")) {
+      } else if (target.classList.contains("mode-select")) {
         itineraryData[currentDay][index].travelMode = target.value;
         saveData();
       }
@@ -475,7 +464,6 @@
       const listEl = document.getElementById("itinerary-list");
       if (!listEl) return;
       
-      // 현재 포커스되어 있는 요소 파악 (입력 창 재생성 시 포커스 잃음 방지)
       const activeEl = document.activeElement;
       const activeIdx = activeEl ? activeEl.dataset.index : null;
       const activeClass = activeEl ? activeEl.className : null;
@@ -520,7 +508,7 @@
               <span class="drag-handle" title="드래그하여 순서 변경">⋮⋮</span>
               <div class="place-index">${idx + 1}</div>
               <input type="text" class="place-title-input" data-index="${idx}" value="${(place.name || '').replace(/"/g, '&quot;')}" 
-                     title="클릭해서 장소명을 자유롭게 수정하세요" />
+                     title="클릭해서 장소명을 자유롭게 수정하고 다른 곳을 누르거나 엔터를 치면 저장됩니다." />
             </div>
             <button class="btn-delete" data-index="${idx}" title="삭제">✕</button>
           </div>
@@ -562,7 +550,6 @@
         markers.push(marker);
       });
 
-      // 기존 입력 중이던 포커스 위치 복원
       if (activeIdx !== null && activeClass) {
         const restoredEl = listEl.querySelector(`.${activeClass.split(' ')[0]}[data-index="${activeIdx}"]`);
         if (restoredEl) {
