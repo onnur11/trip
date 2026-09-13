@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>일본 여행 일정 플래너 v0.6.1 (실시간 공유)</title>
+  <title>일본 여행 일정 플래너 v0.7.0 (실시간 공유)</title>
   
   <style>
     * {
@@ -81,7 +81,7 @@
 
     /* 사이드바 */
     .sidebar {
-      width: 420px;
+      width: 440px;
       min-width: 340px;
       background: #ffffff;
       border-right: 1px solid #e0e0e0;
@@ -202,15 +202,16 @@
     .place-title-wrap {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       flex: 1;
+      margin-right: 8px;
     }
     .drag-handle {
       cursor: grab;
       color: #aaa;
       font-weight: bold;
       font-size: 1.2rem;
-      padding: 0 4px;
+      padding: 0 2px;
       user-select: none;
     }
     .drag-handle:active {
@@ -227,12 +228,39 @@
       justify-content: center;
       font-size: 0.8rem;
       font-weight: bold;
+      flex-shrink: 0;
     }
-    .place-title {
+    
+    /* 장소 이름 직접 수정 input */
+    .place-title-input {
       font-weight: bold;
       font-size: 0.95rem;
       color: #111;
-      word-break: break-all;
+      border: 1px transparent;
+      border-radius: 4px;
+      padding: 2px 4px;
+      width: 100%;
+      outline: none;
+      background: transparent;
+    }
+    .place-title-input:hover {
+      border-color: #ddd;
+      background: #fdfdfd;
+    }
+    .place-title-input:focus {
+      border-color: #1a73e8;
+      background: #fff;
+    }
+
+    .btn-edit-title {
+      background: none;
+      border: none;
+      color: #aaa;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .btn-edit-title:hover {
+      color: #1a73e8;
     }
     .btn-delete {
       background: none;
@@ -264,14 +292,14 @@
       border-color: #1a73e8;
     }
 
-    /* 구간 이동 설정 영역 */
+    /* 구간 이동 커스텀 설정 영역 */
     .leg-connector {
       margin: 8px 0 8px 15px;
       padding-left: 15px;
       border-left: 2px dashed #ccc;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 6px;
     }
     .mode-selector {
       display: flex;
@@ -285,10 +313,20 @@
       font-size: 0.78rem;
       background: #fff;
     }
-    .route-detail {
+    .custom-route-input {
       font-size: 0.78rem;
+      padding: 3px 6px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
       color: #e65100;
       font-weight: bold;
+      width: 95%;
+      outline: none;
+      background: #fffcf8;
+    }
+    .custom-route-input:focus {
+      border-color: #e65100;
+      background: #fff;
     }
 
     /* 지도 영역 */
@@ -337,7 +375,7 @@
 <body>
 
   <header>
-    <h2>🗾 Japan Trip Planner v0.6.1</h2>
+    <h2>🗾 Japan Trip Planner v0.7.0</h2>
   </header>
 
   <!-- 공유 코드 툴바 -->
@@ -552,6 +590,7 @@
         lat: lat,
         lng: lng,
         travelMode: "TRANSIT",
+        customRouteInfo: "",
         memo: ""
       };
 
@@ -627,6 +666,7 @@
         lat: window.selectedPlaceData.lat,
         lng: window.selectedPlaceData.lng,
         travelMode: "TRANSIT",
+        customRouteInfo: "",
         memo: ""
       };
 
@@ -643,13 +683,27 @@
       saveData();
     };
 
+    // 장소 이름 직접 수정 반영
+    window.updatePlaceName = function(index, newName) {
+      if (!newName.trim()) return;
+      window.itineraryData[window.currentDay][index].name = newName;
+      saveData();
+    };
+
     window.updateMemo = function(index, text) {
       window.itineraryData[window.currentDay][index].memo = text;
       saveData();
     };
 
+    // 이동 수단 수정
     window.changeTravelMode = function(index, mode) {
       window.itineraryData[window.currentDay][index].travelMode = mode;
+      saveData();
+    };
+
+    // 이동 정보 수동 텍스트 수정
+    window.updateCustomRouteInfo = function(index, text) {
+      window.itineraryData[window.currentDay][index].customRouteInfo = text;
       saveData();
     };
 
@@ -688,7 +742,7 @@
         card.addEventListener("dragend", handleDragEnd);
 
         card.onclick = (e) => {
-          if (['TEXTAREA', 'SELECT', 'BUTTON', 'SPAN'].includes(e.target.tagName)) return;
+          if (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'SPAN'].includes(e.target.tagName)) return;
           map.panTo(position);
           map.setZoom(15);
         };
@@ -698,11 +752,13 @@
             <div class="place-title-wrap">
               <span class="drag-handle" title="드래그하여 순서 변경">⋮⋮</span>
               <div class="place-index">${idx + 1}</div>
-              <div class="place-title">${place.name}</div>
+              <input type="text" class="place-title-input" value="${place.name.replace(/"/g, '&quot;')}" 
+                     title="클릭해서 장소명을 자유롭게 수정하세요"
+                     onchange="updatePlaceName(${idx}, this.value)" />
             </div>
             <button class="btn-delete" onclick="deletePlace(${idx})" title="삭제">✕</button>
           </div>
-          <textarea class="memo-box" placeholder="메모 입력 (예: 예상 비용, 예약시간 등)" onchange="updateMemo(${idx}, this.value)">${place.memo || ''}</textarea>
+          <textarea class="memo-box" placeholder="메모 입력 (예: 예상 비용, 체류 시간, 예약 정보 등)" onchange="updateMemo(${idx}, this.value)">${place.memo || ''}</textarea>
         `;
 
         listEl.appendChild(card);
@@ -712,14 +768,17 @@
           connector.className = "leg-connector";
           connector.innerHTML = `
             <div class="mode-selector">
-              <span style="font-size:0.75rem; color:#666;">이동방법:</span>
+              <span style="font-size:0.75rem; color:#666;">이동수단:</span>
               <select class="mode-select" onchange="changeTravelMode(${idx}, this.value)">
                 <option value="TRANSIT" ${place.travelMode === 'TRANSIT' ? 'selected' : ''}>🚌 대중교통</option>
                 <option value="WALKING" ${place.travelMode === 'WALKING' ? 'selected' : ''}>🚶 도보</option>
                 <option value="DRIVING" ${place.travelMode === 'DRIVING' ? 'selected' : ''}>🚗 차</option>
               </select>
             </div>
-            <div class="route-detail" id="route-detail-${idx}">계산 중...</div>
+            <input type="text" class="custom-route-input" id="route-detail-${idx}" 
+                   placeholder="이동 시간/방법 수동 입력 (자동계산 중...)"
+                   value="${(place.customRouteInfo || '').replace(/"/g, '&quot;')}"
+                   onchange="updateCustomRouteInfo(${idx}, this.value)" />
           `;
           listEl.appendChild(connector);
         }
@@ -812,12 +871,13 @@
             if (status === "OK") {
               renderer.setDirections(result);
               const leg = result.routes[0].legs[0];
-              if (detailEl) {
-                detailEl.innerHTML = `약 ${leg.duration.text} (${leg.distance.text})`;
+              // 수동 입력값이 비어있을 때만 구글 경로 계산 결과를 자동으로 채워줍니다.
+              if (detailEl && !places[i].customRouteInfo) {
+                detailEl.value = `약 ${leg.duration.text} (${leg.distance.text})`;
               }
             } else {
-              if (detailEl) {
-                detailEl.innerHTML = `경로 정보 없음`;
+              if (detailEl && !places[i].customRouteInfo) {
+                detailEl.value = `경로 정보 없음 (직접 입력 가능)`;
               }
             }
           }
