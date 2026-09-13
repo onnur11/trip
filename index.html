@@ -380,7 +380,7 @@
     </div>
   </div>
 
-  <!-- Firebase SDK 연동 -->
+  <!-- Firebase 및 지도 초기화 스크립트 -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
@@ -397,11 +397,11 @@
       measurementId: "G-MFFJNL1VRQ"
     };
 
-    // Firebase 및 데이터베이스 초기화
+    // Firebase 초기화
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // 전역 상태 변수
+    // 전역 변수
     window.itineraryData = { 1: [] };
     window.currentDay = 1;
     window.currentRoomId = "";
@@ -417,12 +417,10 @@
     let draggedIndex = null;
     let firebaseUnsubscribe = null;
 
-    // 랜덤 6자리 공유 코드 생성
     function generateRoomId() {
       return Math.random().toString(36).substring(2, 8).toUpperCase();
     }
 
-    // URL 파라미터 확인 및 Room ID 초기 설정
     function initRoomId() {
       const urlParams = new URLSearchParams(window.location.search);
       let code = urlParams.get("code");
@@ -434,7 +432,8 @@
 
     function setRoomId(code) {
       window.currentRoomId = code;
-      document.getElementById("room-code-display").innerText = code;
+      const el = document.getElementById("room-code-display");
+      if (el) el.innerText = code;
       localStorage.setItem("LAST_ROOM_CODE", code);
 
       const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?code=' + code;
@@ -443,7 +442,6 @@
       listenToRoomData(code);
     }
 
-    // Firebase 실시간 동기화 수신기
     function listenToRoomData(roomId) {
       if (firebaseUnsubscribe) firebaseUnsubscribe();
 
@@ -461,14 +459,12 @@
       });
     }
 
-    // Firebase 데이터 저장 함수 (전역 연결)
     window.saveData = function() {
       if (!window.currentRoomId) return;
       const roomRef = ref(db, "trips/" + window.currentRoomId);
       set(roomRef, window.itineraryData);
     };
 
-    // 공유 링크 복사 (전역 연결)
     window.copyShareLink = function() {
       const shareUrl = window.location.href;
       navigator.clipboard.writeText(shareUrl).then(() => {
@@ -476,7 +472,6 @@
       });
     };
 
-    // 다른 공유 코드 입력 (전역 연결)
     window.joinRoomByPrompt = function() {
       const code = prompt("참여할 6자리 공유 코드를 입력하세요:");
       if (code && code.trim() !== "") {
@@ -484,7 +479,6 @@
       }
     };
 
-    // 새 일정 생성 (전역 연결)
     window.createNewRoom = function() {
       if (confirm("새로운 여행 일정을 만드시겠습니까?")) {
         const newCode = generateRoomId();
@@ -492,7 +486,7 @@
       }
     };
 
-    // 구글 지도 초기화 (전역 연결)
+    // 구글 지도 생성 및 연결
     window.initMap = function() {
       initRoomId();
 
@@ -524,7 +518,6 @@
         };
       });
 
-      // 지도 클릭 시 팝업으로 추가
       map.addListener("click", (e) => {
         const lat = e.latLng.lat();
         const lng = e.latLng.lng();
@@ -553,7 +546,6 @@
       renderItinerary();
     };
 
-    // 지도 클릭 시 선택된 장소 추가 (전역 연결)
     window.addClickPlace = function(name, lat, lng) {
       const newPlace = {
         name: name,
@@ -570,9 +562,9 @@
       clickInfoWindow.close();
     };
 
-    // Day 탭 렌더링
     function renderDayTabs() {
       const tabsEl = document.getElementById("day-tabs");
+      if (!tabsEl) return;
       tabsEl.innerHTML = "";
 
       const days = Object.keys(window.itineraryData).map(Number).sort((a,b) => a - b);
@@ -585,7 +577,6 @@
       });
     }
 
-    // Day 추가 (전역 연결)
     window.addNewDay = function() {
       const days = Object.keys(window.itineraryData).map(Number);
       const newDayNumber = days.length > 0 ? Math.max(...days) + 1 : 1;
@@ -594,7 +585,6 @@
       switchDay(newDayNumber);
     };
 
-    // Day 삭제 (전역 연결)
     window.deleteCurrentDay = function() {
       const days = Object.keys(window.itineraryData).map(Number).sort((a,b) => a - b);
       if (days.length <= 1) {
@@ -623,7 +613,6 @@
       renderItinerary();
     }
 
-    // 장소 추가 (전역 연결)
     window.addSelectedPlace = function() {
       const inputEl = document.getElementById("place-search");
 
@@ -649,29 +638,26 @@
       window.selectedPlaceData = null;
     };
 
-    // 장소 삭제 (전역 연결)
     window.deletePlace = function(index) {
       window.itineraryData[window.currentDay].splice(index, 1);
       saveData();
     };
 
-    // 메모 업데이트 (전역 연결)
     window.updateMemo = function(index, text) {
       window.itineraryData[window.currentDay][index].memo = text;
       saveData();
     };
 
-    // 이동 수단 변경 (전역 연결)
     window.changeTravelMode = function(index, mode) {
       window.itineraryData[window.currentDay][index].travelMode = mode;
       saveData();
     };
 
-    // 화면 및 경로 update
     function renderItinerary() {
       clearMapElements();
 
       const listEl = document.getElementById("itinerary-list");
+      if (!listEl) return;
       listEl.innerHTML = "";
 
       const places = window.itineraryData[window.currentDay] || [];
@@ -752,7 +738,7 @@
         markers.push(marker);
       });
 
-      if (places.length > 0) {
+      if (places.length > 0 && map) {
         map.fitBounds(bounds);
       }
       updateRoutes();
@@ -838,9 +824,23 @@
         );
       }
     }
+
+    // 구글 지도 API 타이밍 차이 대비 콜백 트리거
+    if (window.googleMapsLoaded) {
+      window.initMap();
+    }
   </script>
 
-  <!-- Google Maps API -->
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBcOf0j2OzccT8-lzWiXpljkw4_6cgGub0&libraries=places&callback=initMap" async defer></script>
+  <!-- Google Maps API (async 및 안전 콜백 처리 적용) -->
+  <script>
+    window.onGoogleMapsLoad = function() {
+      if (typeof window.initMap === 'function') {
+        window.initMap();
+      } else {
+        window.googleMapsLoaded = true;
+      }
+    };
+  </script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBcOf0j2OzccT8-lzWiXpljkw4_6cgGub0&libraries=places&callback=onGoogleMapsLoad" async defer></script>
 </body>
 </html>
