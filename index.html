@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>일본 여행 일정 플래너 v0.4</title>
+  <title>일본 여행 일정 플래너 v0.5</title>
   
   <style>
     * {
@@ -261,6 +261,23 @@
       height: 100%;
     }
 
+    /* 팝업 내 버튼 스타일 */
+    .popup-add-btn {
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 6px;
+      width: 100%;
+      font-size: 0.8rem;
+    }
+    .popup-add-btn:hover {
+      background-color: #1557b0;
+    }
+
     /* 모바일 대응 */
     @media (max-width: 768px) {
       .app-container {
@@ -279,14 +296,14 @@
 <body>
 
   <header>
-    <h2>🗾 Japan Trip Planner v0.4</h2>
+    <h2>🗾 Japan Trip Planner v0.5</h2>
   </header>
 
   <div class="app-container">
     <div class="sidebar">
       <!-- 장소 검색창 -->
       <div class="search-panel">
-        <input type="text" id="place-search" class="search-input" placeholder="장소 검색 (예: 도쿄 타워, 오사카성)">
+        <input type="text" id="place-search" class="search-input" placeholder="장소 검색 또는 지도에서 직접 클릭">
         <button class="btn-add" onclick="addSelectedPlace()">추가</button>
       </div>
 
@@ -310,7 +327,6 @@
   </div>
 
   <script>
-    // 로컬스토리지에서 기존 저장 데이터 로드 (없을 시 기본 구조 초기화)
     const STORAGE_KEY = "JAPAN_TRIP_PLANNER_DATA";
     let itineraryData = loadSavedData() || { 1: [] };
     let currentDay = 1;
@@ -318,17 +334,17 @@
 
     let map;
     let autocomplete;
+    let geocoder;
+    let clickInfoWindow;
     let markers = [];
     let directionsService;
     let directionsRenderers = [];
-    let draggedIndex = null; // 드래그 상태 관리
+    let draggedIndex = null;
 
-    // 데이터 로컬스토리지 저장 함수
     function saveData() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(itineraryData));
     }
 
-    // 데이터 불어오기 함수
     function loadSavedData() {
       const dataStr = localStorage.getItem(STORAGE_KEY);
       if (dataStr) {
@@ -337,7 +353,6 @@
       return null;
     }
 
-    // 구글 지도 초기화
     function initMap() {
       map = new google.maps.Map(document.getElementById("map"), {
         center: { lat: 35.6762, lng: 139.6503 },
@@ -347,8 +362,10 @@
       });
 
       directionsService = new google.maps.DirectionsService();
+      geocoder = new google.maps.Geocoder();
+      clickInfoWindow = new google.maps.InfoWindow();
 
-      // Autocomplete (장소 검색) 연동
+      // Autocomplete 연동
       const searchInput = document.getElementById("place-search");
       autocomplete = new google.maps.places.Autocomplete(searchInput);
       autocomplete.bindTo("bounds", map);
@@ -366,11 +383,54 @@
         };
       });
 
+      // ⭐️ 지도 클릭 이벤트: 클릭한 위치 좌표로 장소 이름 검색 후 일정 추가 팝업 생성
+      map.addListener("click", (e) => {
+        const lat = e.latLng.lat();
+        const lng = e.latLng.lng();
+
+        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+          if (status === "OK" && results[0]) {
+            // 주소 결과 중 구체적인 장소명 추출
+            const placeName = results[0].address_components[0]?.long_name || results[0].formatted_address;
+            
+            const contentString = `
+              <div style="padding: 4px; max-width: 200px;">
+                <b style="font-size:0.9rem;">${placeName}</b><br>
+                <button class="popup-add-btn" onclick="addClickPlace('${placeName.replace(/'/g, "\\'")}', ${lat}, ${lng})">
+                  Day ${currentDay}에 추가
+                </button>
+              </div>
+            `;
+            
+            clickInfoWindow.setContent(contentString);
+            clickInfoWindow.setPosition(e.latLng);
+            clickInfoWindow.open(map);
+          }
+        });
+      });
+
       renderDayTabs();
       renderItinerary();
     }
 
-    // Day 탭 렌더링
+    // 지도 클릭으로 장소 추가 함수
+    function addClickPlace(name, lat, lng) {
+      const newPlace = {
+        name: name,
+        lat: lat,
+        lng: lng,
+        travelMode: "TRANSIT",
+        memo: ""
+      };
+
+      if (!itineraryData[currentDay]) itineraryData[currentDay] = [];
+      itineraryData[currentDay].push(newPlace);
+      saveData();
+
+      clickInfoWindow.close();
+      renderItinerary();
+    }
+
     function renderDayTabs() {
       const tabsEl = document.getElementById("day-tabs");
       tabsEl.innerHTML = "";
@@ -385,7 +445,6 @@
       });
     }
 
-    // Day 추가
     function addNewDay() {
       const days = Object.keys(itineraryData).map(Number);
       const newDayNumber = days.length > 0 ? Math.max(...days) + 1 : 1;
@@ -394,7 +453,6 @@
       switchDay(newDayNumber);
     }
 
-    // 현재 Day 삭제
     function deleteCurrentDay() {
       const days = Object.keys(itineraryData).map(Number).sort((a,b) => a - b);
       if (days.length <= 1) {
@@ -405,7 +463,6 @@
 
       delete itineraryData[currentDay];
       
-      // key 재정렬 (1, 2, 3...)
       const remainingDays = Object.keys(itineraryData).map(Number).sort((a,b) => a - b);
       const newData = {};
       remainingDays.forEach((oldDay, idx) => {
@@ -417,14 +474,13 @@
       switchDay(1);
     }
 
-    // Day 전환
     function switchDay(day) {
       currentDay = day;
+      if (clickInfoWindow) clickInfoWindow.close();
       renderDayTabs();
       renderItinerary();
     }
 
-    // 장소 추가
     function addSelectedPlace() {
       const inputEl = document.getElementById("place-search");
 
@@ -452,27 +508,23 @@
       renderItinerary();
     }
 
-    // 장소 삭제
     function deletePlace(index) {
       itineraryData[currentDay].splice(index, 1);
       saveData();
       renderItinerary();
     }
 
-    // 메모 업데이트
     function updateMemo(index, text) {
       itineraryData[currentDay][index].memo = text;
       saveData();
     }
 
-    // 이동 수단 변경
     function changeTravelMode(index, mode) {
       itineraryData[currentDay][index].travelMode = mode;
       saveData();
       updateRoutes();
     }
 
-    // 일정 및 지도 마커 렌더링
     function renderItinerary() {
       clearMapElements();
 
@@ -484,7 +536,7 @@
       if (places.length === 0) {
         listEl.innerHTML = `
           <div class="empty-msg">
-            📍 상단 검색창에 방문할 장소를 입력하고<br><b>[추가]</b> 버튼을 눌러 일정을 채워보세요.
+            📍 상단 검색창에 장소를 검색하거나<br><b>지도를 직접 클릭</b>하여 일정을 추가해보세요.
           </div>
         `;
         return;
@@ -496,13 +548,11 @@
         const position = { lat: place.lat, lng: place.lng };
         bounds.extend(position);
 
-        // 장소 카드 엘리먼트 (드래그 가능 설정)
         const card = document.createElement("div");
         card.className = "place-card";
         card.draggable = true;
         card.dataset.index = idx;
 
-        // 드래그앤드롭 이벤트 바인딩
         card.addEventListener("dragstart", handleDragStart);
         card.addEventListener("dragover", handleDragOver);
         card.addEventListener("drop", handleDrop);
@@ -528,7 +578,6 @@
 
         listEl.appendChild(card);
 
-        // 구간 이동 수단 설정 커넥터
         if (idx < places.length - 1) {
           const connector = document.createElement("div");
           connector.className = "leg-connector";
@@ -546,7 +595,6 @@
           listEl.appendChild(connector);
         }
 
-        // 구글 지도 마커 생성
         const marker = new google.maps.Marker({
           position: position,
           map: map,
@@ -565,7 +613,6 @@
       updateRoutes();
     }
 
-    /* --- 드래그 앤 드롭 핸들러 --- */
     function handleDragStart(e) {
       draggedIndex = parseInt(this.dataset.index);
       this.classList.add("dragging");
@@ -582,7 +629,6 @@
       const targetIndex = parseInt(this.dataset.index);
       if (draggedIndex === null || draggedIndex === targetIndex) return;
 
-      // 배열 순서 변경
       const places = itineraryData[currentDay];
       const draggedItem = places.splice(draggedIndex, 1)[0];
       places.splice(targetIndex, 0, draggedItem);
@@ -596,7 +642,6 @@
       draggedIndex = null;
     }
 
-    // 지도 요소 초기화
     function clearMapElements() {
       markers.forEach(m => m.setMap(null));
       markers = [];
@@ -604,7 +649,6 @@
       directionsRenderers = [];
     }
 
-    // 각 구간별 경로 탐색 수행
     function updateRoutes() {
       directionsRenderers.forEach(r => r.setMap(null));
       directionsRenderers = [];
@@ -652,7 +696,7 @@
     }
   </script>
 
-  <!-- Google Maps API (Places 라이브러리 포함) -->
+  <!-- Google Maps API (Places, Geocoding 라이브러리 연동) -->
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBcOf0j2OzccT8-lzWiXpljkw4_6cgGub0&libraries=places&callback=initMap" async defer></script>
 </body>
 </html>
