@@ -461,14 +461,14 @@
       });
     }
 
-    // Firebase 데이터 저장 함수
+    // Firebase 데이터 저장 함수 (전역 연결)
     window.saveData = function() {
       if (!window.currentRoomId) return;
       const roomRef = ref(db, "trips/" + window.currentRoomId);
       set(roomRef, window.itineraryData);
     };
 
-    // 공유 링크 복사
+    // 공유 링크 복사 (전역 연결)
     window.copyShareLink = function() {
       const shareUrl = window.location.href;
       navigator.clipboard.writeText(shareUrl).then(() => {
@@ -476,7 +476,7 @@
       });
     };
 
-    // 다른 공유 코드 입력
+    // 다른 공유 코드 입력 (전역 연결)
     window.joinRoomByPrompt = function() {
       const code = prompt("참여할 6자리 공유 코드를 입력하세요:");
       if (code && code.trim() !== "") {
@@ -484,7 +484,7 @@
       }
     };
 
-    // 새 일정 생성
+    // 새 일정 생성 (전역 연결)
     window.createNewRoom = function() {
       if (confirm("새로운 여행 일정을 만드시겠습니까?")) {
         const newCode = generateRoomId();
@@ -492,7 +492,7 @@
       }
     };
 
-    // 구글 지도 초기화 (window 전역에 바인딩하여 Google Maps callback 문제 해결)
+    // 구글 지도 초기화 (전역 연결)
     window.initMap = function() {
       initRoomId();
 
@@ -553,7 +553,7 @@
       renderItinerary();
     };
 
-    // 지도 클릭 시 선택된 장소 추가
+    // 지도 클릭 시 선택된 장소 추가 (전역 연결)
     window.addClickPlace = function(name, lat, lng) {
       const newPlace = {
         name: name,
@@ -585,6 +585,7 @@
       });
     }
 
+    // Day 추가 (전역 연결)
     window.addNewDay = function() {
       const days = Object.keys(window.itineraryData).map(Number);
       const newDayNumber = days.length > 0 ? Math.max(...days) + 1 : 1;
@@ -593,6 +594,7 @@
       switchDay(newDayNumber);
     };
 
+    // Day 삭제 (전역 연결)
     window.deleteCurrentDay = function() {
       const days = Object.keys(window.itineraryData).map(Number).sort((a,b) => a - b);
       if (days.length <= 1) {
@@ -621,7 +623,7 @@
       renderItinerary();
     }
 
-    // 장소 추가
+    // 장소 추가 (전역 연결)
     window.addSelectedPlace = function() {
       const inputEl = document.getElementById("place-search");
 
@@ -647,16 +649,19 @@
       window.selectedPlaceData = null;
     };
 
+    // 장소 삭제 (전역 연결)
     window.deletePlace = function(index) {
       window.itineraryData[window.currentDay].splice(index, 1);
       saveData();
     };
 
+    // 메모 업데이트 (전역 연결)
     window.updateMemo = function(index, text) {
       window.itineraryData[window.currentDay][index].memo = text;
       saveData();
     };
 
+    // 이동 수단 변경 (전역 연결)
     window.changeTravelMode = function(index, mode) {
       window.itineraryData[window.currentDay][index].travelMode = mode;
       saveData();
